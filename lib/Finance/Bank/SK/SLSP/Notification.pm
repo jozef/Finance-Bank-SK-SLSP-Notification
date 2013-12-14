@@ -21,6 +21,7 @@ __PACKAGE__->mk_accessors(qw{
     header_obj
     attached_files
     transactions
+    _tmpdir
 });
 
 sub new {
@@ -67,22 +68,20 @@ sub from_email {
 
         my @transactions;
         my @files =
-            map { +{
-                file => $_,
-                content => ''.$_->slurp,
-            } }
             map { file($_) }
             File::Find::Rule
             ->file()
             ->name( '*' )
             ->in( $extract_dir );
         foreach my $file (@files) {
-            next unless $file->{file}->basename =~ m/\.txt$/;
-            from_to($file->{content},"windows-1250","utf-8");
+            next unless $file->basename =~ m/\.txt$/;
+            my $content = $file->slurp;
+            from_to($content,"windows-1250","utf-8");
+            $file->spew($content);
 
             # process transactions
-            if ($file->{file}->basename =~ m/^K\d+\.txt$/) {
-                push(@transactions, Finance::Bank::SK::SLSP::Notification::Transaction->from_txt($file->{content}));
+            if ($file->basename =~ m/^K\d+\.txt$/) {
+                push(@transactions, Finance::Bank::SK::SLSP::Notification::Transaction->from_txt($content));
             }
         }
 
@@ -90,6 +89,7 @@ sub from_email {
             header_obj          => $parsed->header_obj,
             attached_files      => \@files,
             transactions        => \@transactions,
+            _tmpdir             => $tmpdir,
         )
     }
 }
