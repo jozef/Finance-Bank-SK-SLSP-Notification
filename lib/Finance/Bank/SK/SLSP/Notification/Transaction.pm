@@ -75,11 +75,11 @@ sub from_txt {
             unless $account_line =~ m/
                 ^\s
                 (\w{2} \d{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
-                (\w .+)
+                (\w .+)?
                 $
             /xms;
         $transaction->{account_number} = $1;
-        $transaction->{account_name} = $2;
+        $transaction->{account_name}   = $2;
 
         my $symbols_line = shift(@lines);
         die 'failed parsing "'.$symbols_line.'"'
@@ -110,7 +110,7 @@ sub as_text {
     my ($self) = @_;
     my $text = '';
     foreach my $attr ($self->ordered_attributes) {
-        $text .= $attr.': '.$self->$attr."\n";
+        $text .= $attr.': '.(defined($self->$attr) ? $self->$attr : '')."\n";
     }
     return $text;
 }
