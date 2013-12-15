@@ -74,8 +74,8 @@ sub from_txt {
         die 'failed parsing "'.$account_line.'"'
             unless $account_line =~ m/
                 ^\s
-                (\w{2} \d{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
-                (\w .+)?
+                (\w{2} \d [^\s]{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
+                ([^\s] .+)?
                 $
             /xms;
         $transaction->{account_number} = $1;
