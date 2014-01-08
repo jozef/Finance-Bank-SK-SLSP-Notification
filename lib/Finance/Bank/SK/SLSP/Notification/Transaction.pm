@@ -70,16 +70,29 @@ sub from_txt {
         $transaction->{amount} = $4;
         $transaction->{type} = ($4 > 0 ? 'credit' : 'payment');
 
+        $transaction->{account_number} = '';
+        $transaction->{account_name}   = '';
         my $account_line = shift(@lines);
-        die 'failed parsing "'.$account_line.'"'
-            unless $account_line =~ m/
-                ^\s
-                (\w{2} \d [^\s]{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
-                ([^\s] .+)?
-                $
-            /xms;
-        $transaction->{account_number} = $1;
-        $transaction->{account_name}   = $2;
+        # EU accounts
+        if ($account_line =~ m/
+            ^\s
+            (\w{2} \d [^\s]{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
+            ([^\s] .+)?
+            $
+        /xms) {
+            $transaction->{account_number} = $1;
+            $transaction->{account_name}   = $2;
+        }
+        # non-IBAN accounts
+        if ($account_line =~ m/
+            ^\s
+            (.{5,}?)
+            \s{5,}
+            (.{5,}?)
+            $
+        /xms) {
+            $transaction->{account_name}   = $1.' - '.$2;
+        }
 
         my $symbols_line = shift(@lines);
         die 'failed parsing "'.$symbols_line.'"'
