@@ -98,14 +98,14 @@ sub from_txt {
         die 'failed parsing "'.$symbols_line.'"'
             unless $symbols_line =~ m/
                 ^\s
-                VS:(\d+) \s
-                KS:(\d+) \s
-                SS:(\d+)
+                VS:(\d*) \s
+                KS:(\d*) \s
+                SS:(\d*)
                 $
             /xms;
-        $transaction->{vs} = $1;
-        $transaction->{ks} = $2;
-        $transaction->{ss} = $2;
+        $transaction->{vs} = $1 if length($1 // '');
+        $transaction->{ks} = $2 if length($2 // '');
+        $transaction->{ss} = $3 if length($3 // '');
 
         @lines =
             map { s/^\s+//;$_ }
