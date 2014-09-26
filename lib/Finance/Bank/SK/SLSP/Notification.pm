@@ -3,7 +3,7 @@ package Finance::Bank::SK::SLSP::Notification;
 use warnings;
 use strict;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Email::MIME;
 use File::Temp qw(tempdir);

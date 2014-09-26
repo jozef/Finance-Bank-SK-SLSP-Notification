@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use utf8;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use base 'Class::Accessor::Fast';
 
@@ -73,25 +73,15 @@ sub from_txt {
         $transaction->{account_number} = '';
         $transaction->{account_name}   = '';
         my $account_line = shift(@lines);
-        # EU accounts
         if ($account_line =~ m/
             ^\s
-            (\w{2} \d [^\s]{5,40}) \s    # IBAN should be max 34 chars wide but it depends on country
+            (?:(\w{2} \d [^\s]{5,40}) \s)?    # IBAN should be max 34 chars wide but it depends on country
             ([^\s] .+)?
             $
         /xms) {
             $transaction->{account_number} = $1;
             $transaction->{account_name}   = $2;
-        }
-        # non-IBAN accounts
-        if ($account_line =~ m/
-            ^\s
-            (.{5,}?)
-            \s{5,}
-            (.{5,}?)
-            $
-        /xms) {
-            $transaction->{account_name}   = $1.' - '.$2;
+            $transaction->{account_name}   =~ s/\s+$//;
         }
 
         my $symbols_line = shift(@lines);
