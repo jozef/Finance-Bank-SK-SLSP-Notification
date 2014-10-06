@@ -68,7 +68,10 @@ sub from_txt {
         $transaction->{date1} = $2;
         $transaction->{date2} = $3;
         $transaction->{amount} = $4;
-        $transaction->{type} = ($4 > 0 ? 'credit' : 'payment');
+        $transaction->{cent_amount} = $transaction->{amount};
+        $transaction->{cent_amount} =~ s/[.]//;
+        $transaction->{cent_amount} += 0;
+        $transaction->{type} = ($transaction->{amount} > 0 ? 'credit' : 'payment');
 
         $transaction->{account_number} = '';
         $transaction->{account_name}   = '';
@@ -125,6 +128,7 @@ sub ordered_attributes {
         account_name
         account_number
         amount
+        cent_amount
         date1
         date2
         vs
