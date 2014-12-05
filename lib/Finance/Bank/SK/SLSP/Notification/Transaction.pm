@@ -30,25 +30,25 @@ sub from_txt {
     my @transactions;
     { # get transactions
         my @trans_lines = split(/\r?\n/, $transactions);
-        die 'failed parsing 3'
-            unless ($trans_lines[0] =~ m/^(\s+)\d/);
-        my $prefix_whitespace = $1;
-        @trans_lines = map {
-            length($_) >= length($prefix_whitespace)
-            ? substr($_, length($prefix_whitespace))
-            : ''
-        } @trans_lines;
-        my $current_transaction;
-        foreach my $line (@trans_lines) {
-            if ($line =~ m/^(\d+)\s/) {
-                push(@transactions, $current_transaction)
-                    if $current_transaction;
-                $current_transaction = { original_text => '' };
+        if ($trans_lines[0] =~ m/^(\s+)\d/) {
+            my $prefix_whitespace = $1;
+            @trans_lines = map {
+                length($_) >= length($prefix_whitespace)
+                ? substr($_, length($prefix_whitespace))
+                : ''
+            } @trans_lines;
+            my $current_transaction;
+            foreach my $line (@trans_lines) {
+                if ($line =~ m/^(\d+)\s/) {
+                    push(@transactions, $current_transaction)
+                        if $current_transaction;
+                    $current_transaction = { original_text => '' };
+                }
+                $current_transaction->{original_text} .= $line."\n";
             }
-            $current_transaction->{original_text} .= $line."\n";
+            push(@transactions, $current_transaction)
+                if $current_transaction;
         }
-        push(@transactions, $current_transaction)
-            if $current_transaction;
     }
 
     #parse transactions
