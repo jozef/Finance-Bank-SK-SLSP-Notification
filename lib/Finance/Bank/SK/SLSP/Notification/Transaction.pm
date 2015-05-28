@@ -30,25 +30,25 @@ sub from_txt {
     my @transactions;
     { # get transactions
         my @trans_lines = split(/\r?\n/, $transactions);
-        die 'failed parsing 3'
-            unless ($trans_lines[0] =~ m/^(\s+)\d/);
-        my $prefix_whitespace = $1;
-        @trans_lines = map {
-            length($_) >= length($prefix_whitespace)
-            ? substr($_, length($prefix_whitespace))
-            : ''
-        } @trans_lines;
-        my $current_transaction;
-        foreach my $line (@trans_lines) {
-            if ($line =~ m/^(\d+)\s/) {
-                push(@transactions, $current_transaction)
-                    if $current_transaction;
-                $current_transaction = { original_text => '' };
+        if ($trans_lines[0] =~ m/^(\s+)\d/) {
+            my $prefix_whitespace = $1;
+            @trans_lines = map {
+                length($_) >= length($prefix_whitespace)
+                ? substr($_, length($prefix_whitespace))
+                : ''
+            } @trans_lines;
+            my $current_transaction;
+            foreach my $line (@trans_lines) {
+                if ($line =~ m/^(\d+)\s/) {
+                    push(@transactions, $current_transaction)
+                        if $current_transaction;
+                    $current_transaction = { original_text => '' };
+                }
+                $current_transaction->{original_text} .= $line."\n";
             }
-            $current_transaction->{original_text} .= $line."\n";
+            push(@transactions, $current_transaction)
+                if $current_transaction;
         }
-        push(@transactions, $current_transaction)
-            if $current_transaction;
     }
 
     #parse transactions
@@ -68,7 +68,10 @@ sub from_txt {
         $transaction->{date1} = $2;
         $transaction->{date2} = $3;
         $transaction->{amount} = $4;
-        $transaction->{type} = ($4 > 0 ? 'credit' : 'payment');
+        $transaction->{cent_amount} = $transaction->{amount};
+        $transaction->{cent_amount} =~ s/[.]//;
+        $transaction->{cent_amount} += 0;
+        $transaction->{type} = ($transaction->{amount} > 0 ? 'credit' : 'payment');
 
         $transaction->{account_number} = '';
         $transaction->{account_name}   = '';
@@ -125,6 +128,7 @@ sub ordered_attributes {
         account_name
         account_number
         amount
+        cent_amount
         date1
         date2
         vs
