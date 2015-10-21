@@ -3,14 +3,14 @@ package Finance::Bank::SK::SLSP::Notification;
 use warnings;
 use strict;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use Email::MIME;
 use File::Temp qw(tempdir);
 use Path::Class qw(file dir);
 use Archive::Extract;
 use File::Find::Rule;
-use Encode 'from_to';
+use Encode qw(decode from_to);
 use Email::Address;
 
 use Finance::Bank::SK::SLSP::Notification::Transaction;
@@ -75,9 +75,10 @@ sub from_email {
             ->in( $extract_dir );
         foreach my $file (@files) {
             next unless $file->basename =~ m/\.txt$/;
-            my $content = $file->slurp;
-            from_to($content,"windows-1250","utf-8");
-            $file->spew($content);
+            my $content_raw = $file->slurp(iomode => '<:raw');
+            from_to($content_raw, "windows-1250",'utf8',);
+            $file->spew($content_raw, iomode => '<:raw');
+            my $content = decode('utf8', $content_raw);
 
             # process transactions
             if ($file->basename =~ m/^K\d+\.txt$/) {
