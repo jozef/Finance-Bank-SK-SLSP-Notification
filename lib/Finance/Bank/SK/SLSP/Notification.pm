@@ -77,7 +77,7 @@ sub from_email {
             next unless $file->basename =~ m/\.txt$/;
             my $content_raw = $file->slurp(iomode => '<:raw');
             from_to($content_raw, "windows-1250",'utf8',);
-            $file->spew($content_raw, iomode => '<:raw');
+            $file->spew(iomode => '>:raw', $content_raw);
             my $content = decode('utf8', $content_raw);
 
             # process transactions
