@@ -12,6 +12,7 @@ use Archive::Extract;
 use File::Find::Rule;
 use Encode qw(decode from_to);
 use Email::Address;
+use DateTime::Format::Mail;
 
 use Finance::Bank::SK::SLSP::Notification::Transaction;
 
@@ -21,6 +22,7 @@ __PACKAGE__->mk_accessors(qw{
     header_obj
     attached_files
     transactions
+    created_dt
     _tmpdir
 });
 
@@ -73,6 +75,7 @@ sub from_email {
             ->file()
             ->name( '*' )
             ->in( $extract_dir );
+
         foreach my $file (@files) {
             next unless $file->basename =~ m/\.txt$/;
             my $content_raw = $file->slurp(iomode => '<:raw');
@@ -86,10 +89,21 @@ sub from_email {
             }
         }
 
+        my $default_dt =
+            eval {DateTime::Format::Mail->parse_datetime($parsed->header_obj->header('Date'))};
+        if ($default_dt) {
+            my $date_str = $default_dt->strftime('%d%m%y');
+            foreach my $trans (@transactions) {
+                $trans->{date1} //= $date_str;
+                $trans->{date2} //= $date_str;
+            }
+        }
+
         return $class->new(
             header_obj          => $parsed->header_obj,
             attached_files      => \@files,
             transactions        => \@transactions,
+            created_dt          => $default_dt,
             _tmpdir             => $tmpdir,
         )
     }

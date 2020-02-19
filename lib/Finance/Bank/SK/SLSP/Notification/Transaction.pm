@@ -21,90 +21,123 @@ sub new {
 sub from_txt {
     my ($class, $txt) = @_;
 
-    my ($transactions, $our_account1, $our_account2, @rest) =
-        split(/_{10,}/, $txt);
-    die 'failed parsing 1' unless $transactions || $our_account1 || $our_account2;
-    my $our_account = $our_account1.$our_account2;
-    die 'failed parsing 2' unless @rest == 1 || $rest[0] eq '';
-
     my @transactions;
-    { # get transactions
-        my @trans_lines = split(/\r?\n/, $transactions);
-        if ($trans_lines[0] =~ m/^(\s+)\d/) {
-            my $prefix_whitespace = $1;
-            @trans_lines = map {
-                length($_) >= length($prefix_whitespace)
-                ? substr($_, length($prefix_whitespace))
-                : ''
-            } @trans_lines;
-            my $current_transaction;
-            foreach my $line (@trans_lines) {
-                if ($line =~ m/^(\d+)\s/) {
-                    push(@transactions, $current_transaction)
-                        if $current_transaction;
-                    $current_transaction = { original_text => '' };
-                }
-                $current_transaction->{original_text} .= $line."\n";
-            }
-            push(@transactions, $current_transaction)
-                if $current_transaction;
-        }
+
+    if ($txt =~ m/^(Rezervácia|Storno rezervacie) \(POS\)/) {
+        return;
     }
+    elsif ($txt =~ m/^((Výber|Platba) kartou|Nákup na internete|Storno výberu kartou \(ATM\))/) {
+        my $negative = ($txt =~ m/^Storno / ? 1 : 0);
+        my $transaction = {};
+        $transaction->{original_text} = $txt;
+        my @lines = map { s/\s+$//; $_; } split(/\n/, $txt);
+        $transaction->{display_name} = $lines[0];
+        die 'failed to parse: '.$lines[1]
+            if ($lines[1] !~ m/^Ciastka: (\d+),(\d{2}) EUR/);
+        $transaction->{amount} = $1+($2/100);
+        $transaction->{cent_amount} = $1.$2;
+        if ($negative) {
+            $transaction->{amount}      = 0 - $transaction->{amount};
+            $transaction->{cent_amount} = 0 - $transaction->{cent_amount};
+        }
+        $transaction->{type} = 'payment';
+        die 'failed to parse: '.$lines[1]
+            if ($lines[2] !~ m/^Karta: (.+)/);
+        $transaction->{account_number} = 'atmcard-'.$1;
+        $transaction->{account_name} = '';
+        $transaction->{description} = '';
+        for (my $i = 3; $i < @lines; $i++) {
+            last if ($lines[$i] =~ m/^\s*$/);
+            $transaction->{description} .= $lines[$i] . ', ';
+        }
+        $transaction->{description} =~ s/, $//;
+        push(@transactions, $transaction);
+    }
+    else {
+        my ($transactions, $our_account1, $our_account2, @rest) =
+            split(/_{10,}/, $txt);
+        die 'failed parsing 1' unless $transactions || $our_account1 || $our_account2;
+        my $our_account = $our_account1.$our_account2;
+        die 'failed parsing 2' unless @rest == 1 || $rest[0] eq '';
 
-    #parse transactions
-    foreach my $transaction (@transactions) {
-        my @lines = split(/\n/,$transaction->{original_text});
-
-        my $info_line = shift(@lines);
-        die 'failed parsing "'.$info_line.'"'
-            unless $info_line =~ m/
-                ^\d+ \s
-                (.+?) \s+
-                (\d{6}) \s+
-                (\d{6}) \s+
-                (-?\d+\.\d{2}) $
-            /xms;
-        $transaction->{display_name} = $1;
-        $transaction->{date1} = $2;
-        $transaction->{date2} = $3;
-        $transaction->{amount} = $4;
-        $transaction->{cent_amount} = $transaction->{amount};
-        $transaction->{cent_amount} =~ s/[.]//;
-        $transaction->{cent_amount} += 0;
-        $transaction->{type} = ($transaction->{amount} > 0 ? 'credit' : 'payment');
-
-        $transaction->{account_number} = '';
-        $transaction->{account_name}   = '';
-        my $account_line = shift(@lines);
-        if ($account_line =~ m/
-            ^\s
-            (?:(\w{2} \d [^\s]{5,40}) \s)?    # IBAN should be max 34 chars wide but it depends on country
-            ([^\s] .+)?
-            $
-        /xms) {
-            $transaction->{account_number} = $1;
-            $transaction->{account_name}   = $2;
-            $transaction->{account_name}   =~ s/\s+$//;
+        { # get transactions
+            my @trans_lines = split(/\r?\n/, $transactions);
+            if ($trans_lines[0] =~ m/^(\s+)\d/) {
+                my $prefix_whitespace = $1;
+                @trans_lines = map {
+                    length($_) >= length($prefix_whitespace)
+                    ? substr($_, length($prefix_whitespace))
+                    : ''
+                } @trans_lines;
+                my $current_transaction;
+                foreach my $line (@trans_lines) {
+                    if ($line =~ m/^(\d+)\s/) {
+                        push(@transactions, $current_transaction)
+                            if $current_transaction;
+                        $current_transaction = { original_text => '' };
+                    }
+                    $current_transaction->{original_text} .= $line."\n";
+                }
+                push(@transactions, $current_transaction)
+                    if $current_transaction;
+            }
         }
 
-        my $symbols_line = shift(@lines);
-        die 'failed parsing "'.$symbols_line.'"'
-            unless $symbols_line =~ m/
-                ^\s
-                VS:(\d*) \s
-                KS:(\d*) \s
-                SS:(\d*)
-                $
-            /xms;
-        $transaction->{vs} = $1 if length($1 // '');
-        $transaction->{ks} = $2 if length($2 // '');
-        $transaction->{ss} = $3 if length($3 // '');
+        #parse transactions
+        foreach my $transaction (@transactions) {
+            my @lines = split(/\n/,$transaction->{original_text});
 
-        @lines =
-            map { s/^\s+//;$_ }
-            map { s/\s+$//;$_ }
-            grep { $_ !~ m/^\s*$/ } @lines;
-        $transaction->{description} = join("", @lines);
+            my $info_line = shift(@lines);
+            die 'failed parsing "'.$info_line.'"'
+                unless $info_line =~ m/
+                    ^\d+ \s
+                    (.+?) \s+
+                    (\d{6}) \s+
+                    (\d{6}) \s+
+                    (-?\d+\.\d{2}) $
+                /xms;
+            $transaction->{display_name} = $1;
+            $transaction->{date1} = $2;
+            $transaction->{date2} = $3;
+            $transaction->{amount} = $4;
+            $transaction->{cent_amount} = $transaction->{amount};
+            $transaction->{cent_amount} =~ s/[.]//;
+            $transaction->{cent_amount} += 0;
+            $transaction->{type} = ($transaction->{amount} > 0 ? 'credit' : 'payment');
+
+            $transaction->{account_number} = '';
+            $transaction->{account_name}   = '';
+            my $account_line = shift(@lines);
+            if ($account_line =~ m/
+                ^\s
+                (?:(\w{2} \d [^\s]{5,40}) \s)?    # IBAN should be max 34 chars wide but it depends on country
+                ([^\s] .+)?
+                $
+            /xms) {
+                $transaction->{account_number} = $1;
+                $transaction->{account_name}   = $2;
+                $transaction->{account_name}   =~ s/\s+$//;
+            }
+
+            my $symbols_line = shift(@lines);
+            die 'failed parsing "'.$symbols_line.'"'
+                unless $symbols_line =~ m/
+                    ^\s
+                    VS:(\d*) \s
+                    KS:(\d*) \s
+                    SS:(\d*)
+                    $
+                /xms;
+            $transaction->{vs} = $1 if length($1 // '');
+            $transaction->{ks} = $2 if length($2 // '');
+            $transaction->{ss} = $3 if length($3 // '');
+
+            @lines =
+                map { s/^\s+//;$_ }
+                map { s/\s+$//;$_ }
+                grep { $_ !~ m/^\s*$/ } @lines;
+            $transaction->{description} = join("", @lines);
+        }
     }
 
     @transactions = map { $class->new(%{$_}) } @transactions;
