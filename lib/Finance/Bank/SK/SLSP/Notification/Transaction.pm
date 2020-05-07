@@ -4,18 +4,96 @@ use warnings;
 use strict;
 use utf8;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
+
+use Web::Scraper;
+use DateTime::Format::Strptime;
+
+my $george_strp = DateTime::Format::Strptime->new(
+    on_error => 'undef',
+    pattern   => '%d.%m.%Y %H:%M:%S',
+    time_zone => 'local',
+);
 
 use base 'Class::Accessor::Fast';
 
 __PACKAGE__->mk_accessors(qw{
     original_text
+    created_dt
 }, ordered_attributes());
 
 sub new {
     my ($class, %params) = @_;
     my $self  = $class->SUPER::new({ %params });
     return $self;
+}
+
+sub from_html {
+    my ($class, $html) = @_;
+
+    my $slsp_proc = scraper {
+        process '//table[@class="tl"]',
+            'original_text' => 'TEXT',
+            process '//table[@class="tl"]/tr/td[@class="i1"]', 'main' => scraper {
+            process 'p.n1',                   'display_name' => 'TEXT';
+            process 'p.acc',                  'account_to'   => 'TEXT';
+            process 'p.d1',                   'datum'        => 'TEXT';
+            process 'p.a1',                   'amount'       => 'TEXT';
+            process '//p[count(./span) = 2]', 'details[]'    => scraper {
+                process '//span[position() = 1]', 'key'   => 'TEXT';
+                process '//span[position() = 2]', 'value' => 'TEXT';
+            };
+            process 'div.pd p.z1.s1 span.z1-s1', 'note[]' => 'TEXT';
+        }
+    };
+    my $res = $slsp_proc->scrape(\$html);
+
+    die 'parsing failed: ' . $html
+        unless $res->{main};
+
+    $res->{main}->{details} = {
+        map {s/^\s+//; s/\s+$//; $_;}
+        map {$_->{key} => $_->{value}} @{$res->{main}->{details}}
+    };
+    foreach my $key (keys %{$res->{main}}) {
+        next if ref($res->{main}->{$key});
+        $res->{main}->{$key} =~ s/^\s+//;
+        $res->{main}->{$key} =~ s/\s+$//;
+    }
+
+    my $display_name  = $res->{main}->{display_name};
+    my $account_to    = $res->{main}->{account_to};
+    my $original_text = $res->{original_text};
+    my $datetime      = $george_strp->parse_datetime($res->{main}->{datum});
+    die 'can not parse datetime: ' . $res->{main}->{datum}
+        unless $datetime;
+    my ($amount, $cent_amount);
+    if ($res->{main}->{amount} =~ /^(-?\d+),(\d\d) EUR$/) {
+        $cent_amount = int($1 . $2);
+        $amount      = "$1.$2";
+    }
+    else {
+        die 'can not parse amount: ' . $res->{main}->{amount};
+    }
+    my ($account_number, $account_name) =
+        split(/\s+/, $res->{main}->{details}->{"Proti\x{fa}\x{10d}et:"}, 2);
+    my $description =
+        join(' ', grep {length($_)} map {s/^\s+//; s/\s$//; $_;} @{$res->{main}->{note}});
+
+    return $class->new(
+        display_name   => $display_name,
+        type           => ($cent_amount > 0 ? 'credit' : 'payment'),
+        account_number => $account_number,
+        account_name   => $account_name,
+        amount         => $amount,
+        cent_amount    => $cent_amount,
+        description    => $description,
+        date1          => $datetime->strftime('%d%m%y'),
+        date2          => $datetime->strftime('%d%m%y'),
+        created_dt     => $datetime,
+        original_text  => $original_text,
+        account_to     => $account_to,
+    );
 }
 
 sub from_txt {
@@ -154,8 +232,18 @@ sub as_text {
     return $text;
 }
 
+sub as_data {
+    my ($self) = @_;
+    my %trans_data;
+    foreach my $attr ($self->ordered_attributes) {
+        $trans_data{$attr} = $self->$attr;
+    }
+    return \%trans_data;
+}
+
 sub ordered_attributes {
     return qw(
+        account_to
         type
         display_name
         account_name

@@ -2,6 +2,7 @@ Revision history for Finance-Bank-SK-SLSP-Notification
 
 0.03    X.X.XXX
     - decoding transactions as proper utf8 strings
+    - decoding html emails
 
 0.02    28.5.2014
     - missing transactions non-fatal

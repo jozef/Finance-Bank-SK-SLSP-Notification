@@ -48,6 +48,18 @@ sub email_from {
     return $from->address;
 }
 
+sub from_html {
+    my ($class, $html) = @_;
+
+    my $transaction = Finance::Bank::SK::SLSP::Notification::Transaction->from_html($html);
+    return unless $transaction;
+
+    return $class->new(
+        transactions => [$transaction],
+        created_dt   => $transaction->created_dt,
+    );
+}
+
 sub from_email {
     my ($class, $email) = @_;
 
@@ -107,6 +119,8 @@ sub from_email {
             _tmpdir             => $tmpdir,
         )
     }
+
+    return;
 }
 
 sub has_transactions {
