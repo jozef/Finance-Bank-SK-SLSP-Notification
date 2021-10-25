@@ -16,7 +16,7 @@ my $builder = Module::Build->new(
         'Encode'                     => 0,
         'Email::Address'             => 0,
         'Class::Accessor::Fast'      => 0,
-        'Web::Scraper'               => 0,
+        'Web::Scraper::LibXML'       => 0,
         'DateTime::Format::Strptime' => 0,
     },
     build_requires     => {'Test::More'    => 0,},

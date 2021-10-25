@@ -6,7 +6,8 @@ use utf8;
 
 our $VERSION = '0.04';
 
-use Web::Scraper;
+use Web::Scraper::LibXML;
+HTML::TreeBuilder::LibXML->replace_original();
 use DateTime::Format::Strptime;
 
 my $george_strp = DateTime::Format::Strptime->new(
