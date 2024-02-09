@@ -3,6 +3,7 @@ package Finance::Bank::SK::SLSP::Notification::Transaction;
 use warnings;
 use strict;
 use utf8;
+use Encode qw(decode_utf8);
 
 our $VERSION = '0.04';
 
@@ -92,6 +93,66 @@ sub from_html {
         date1          => $datetime->strftime('%d%m%y'),
         date2          => $datetime->strftime('%d%m%y'),
         created_dt     => $datetime,
+        original_text  => $original_text,
+        account_to     => $account_to,
+    );
+}
+
+sub from_body {
+    my ($class, $subject, $email_body) = @_;
+
+    my $original_text = decode_utf8($email_body);
+    my $display_name  = $subject;
+    my $account_name  = '';
+    my $description   = '';
+
+    my ($cent_amount, $amount, $account_number, $datetime1, $datetime2, $account_to);
+
+    for my $line (split(/\v+/, $original_text)) {
+        if ($line =~ m/^Účet:\s+([^\s]+)\b/) {
+            $account_to = $1;
+        }
+        elsif ($line =~ m/^Dátum transakcie:\s+([^\s]+)[.]([^\s]+)[.]([^\s]+)\b/) {
+            my ($dd, $mm, $yyyy) = ($1, $2, $3);
+            $datetime1 = DateTime->new(day => $dd, month => $mm, year => $yyyy);
+        }
+        elsif ($line =~ m/^Dátum valuty:\s+([^\s]+)[.]([^\s]+)[.]([^\s]+)\b/) {
+            my ($dd, $mm, $yyyy) = ($1, $2, $3);
+            $datetime2 = DateTime->new(day => $dd, month => $mm, year => $yyyy);
+        }
+        elsif ($line =~ m/^Suma:\s+(-?\d+)[,](\d{2})\b/) {
+            $amount      = $1 + ($2 / 100);
+            $cent_amount = $1 . $2;
+        }
+        elsif ($line =~ m/^Protiúčet:\s+([^\s]+)\b/) {
+            $account_number = $1;
+        }
+        elsif ($line =~ m/^(?:Referencia platiteľa|Správa pre príjemcu):\s+(.+)$/) {
+            if ($1 ne 'NOTPROVIDED') {
+                $description = $description ? $description . ' ' . $1 : $1;
+            }
+        }
+    }
+
+    return
+        unless ($cent_amount
+        && $amount
+        && $account_number
+        && $datetime1
+        && $datetime2
+        && $account_to);
+
+    return $class->new(
+        display_name   => $display_name,
+        type           => ($cent_amount > 0 ? 'credit' : 'payment'),
+        account_number => $account_number,
+        account_name   => $account_name,
+        amount         => $amount,
+        cent_amount    => $cent_amount,
+        description    => $description,
+        date1          => $datetime1->strftime('%d%m%y'),
+        date2          => $datetime2->strftime('%d%m%y'),
+        created_dt     => $datetime1,
         original_text  => $original_text,
         account_to     => $account_to,
     );

@@ -64,11 +64,17 @@ sub from_email {
     my ($class, $email) = @_;
 
     my $parsed = Email::MIME->new($email);
+
+    my $default_dt =
+        eval {DateTime::Format::Mail->parse_datetime($parsed->header_obj->header('Date'))};
+
+    my $zip_att_count = 0;
     foreach my $part ($parsed->parts) {
 
         my $filename = $part->filename;
         next unless $filename;
         next unless $filename =~ m/\.zip$/;
+        $zip_att_count++;
         my $body = $part->body;
 
         my $tmpdir = tempdir( CLEANUP => 1 );
@@ -101,8 +107,6 @@ sub from_email {
             }
         }
 
-        my $default_dt =
-            eval {DateTime::Format::Mail->parse_datetime($parsed->header_obj->header('Date'))};
         if ($default_dt) {
             my $date_str = $default_dt->strftime('%d%m%y');
             foreach my $trans (@transactions) {
@@ -118,6 +122,19 @@ sub from_email {
             created_dt          => $default_dt,
             _tmpdir             => $tmpdir,
         )
+    }
+
+    unless ($zip_att_count) {
+        return $class->new(
+            header_obj   => $parsed->header_obj,
+            transactions => [
+                Finance::Bank::SK::SLSP::Notification::Transaction->from_body(
+                    $parsed->header_obj->header('Subject'),
+                    $parsed->body,
+                )
+            ],
+            created_dt => $default_dt,
+        );
     }
 
     return;
